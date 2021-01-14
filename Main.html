@@ -38,6 +38,7 @@
 		var stickerSpacing;
 
 		var defaultMat;
+		var stickerDefaultMat;
 
 		var cubes;
 		
@@ -67,9 +68,32 @@
 			[0, 0, +1],
 		];
 
+		var uvAxisOrder = [
+			[0, 1, 2],
+			[2, 0, 1],
+			[0, 2, 1],
+			[1, 0, 2],
+			[2, 1, 0],
+			[1, 2, 0],
+		];
+
+		var cubeCenter = new THREE.Object3D();
+		var pivots = [];
+
         function CreateCube() {
 
 			cubes = [];
+			scene.add(cubeCenter);
+			cubeCenter.position.set((xCubes / 2.0) * (cubeSize + cubeSpacing), (yCubes / 2.0) * (cubeSize + cubeSpacing), (zCubes / 2.0) * (cubeSize + cubeSpacing));
+
+			for(let i = 0; i < 6; i++) {
+				var newPivot = new THREE.Object3D();
+				scene.add(newPivot);
+				newPivot.parent = cubeCenter;
+
+				newPivot.position = new THREE.Vector3(cubeSize + (cubeSpacing));
+				pivots.push(newPivot);
+			}
 
             var x, y, z;
             for (x = 0; x < xCubes; x++) {
@@ -89,6 +113,9 @@
 
 						cubes[x][y][z] = newCube;
 
+						newCube.parent = cubeCenter;
+						newCube.position.sub(cubeCenter.position);
+
                     }
                 }
 			}
@@ -98,6 +125,10 @@
 		}
 
 		function AttachStickers() {
+
+			var xl = 1.0 / xCubes;
+			var yl = 1.0 / yCubes;
+			var zl = 1.0 / zCubes;
 
 			var x, y, z;
             for (x = 0; x < xCubes; x++) {
@@ -115,25 +146,130 @@
 
 								var cubeRadius = cubeSize/2.0;
 
+								var side = cubeRadius - stickerMargin;
+								var radius = cubeRadius + stickerSpacing;
+
+								var vertexPos = [
+									[
+										[radius, -side, -side],
+										[radius, side, -side],
+										[radius, side, side],
+										[radius, -side, side],
+									],
+									[
+										[-side, radius, -side],
+										[-side, radius, side],
+										[side, radius, side],
+										[side, radius, -side],
+									],
+									[
+										[-radius, -side, -side],
+										[-radius, -side, side],
+										[-radius, side, side],
+										[-radius, side, -side],
+									],
+									[
+										[-side, -radius, -side],
+										[side, -radius, -side],
+										[side, -radius, side],
+										[-side, -radius, side],
+									],
+									[
+										[-side, -side, -radius],
+										[-side, side, -radius],
+										[side, side, -radius],
+										[side, -side, -radius],
+									],
+									[
+										[-side, -side, radius],
+										[side, -side, radius],
+										[side, side, radius],
+										[-side, side, radius],
+									],
+								];
+
 								quadGeo.vertices.push(
-									new THREE.Vector3(cubeRadius + stickerSpacing, -(cubeRadius - stickerMargin), -(cubeRadius - stickerMargin)),
-									new THREE.Vector3(cubeRadius + stickerSpacing, -(cubeRadius - stickerMargin), (cubeRadius - stickerMargin)),
-									new THREE.Vector3(cubeRadius + stickerSpacing, (cubeRadius - stickerMargin), (cubeRadius - stickerMargin)),
-									new THREE.Vector3(cubeRadius + stickerSpacing, (cubeRadius - stickerMargin), -(cubeRadius - stickerMargin))
+									new THREE.Vector3(vertexPos[i][0][0], vertexPos[i][0][1], vertexPos[i][0][2]),
+									new THREE.Vector3(vertexPos[i][1][0], vertexPos[i][1][1], vertexPos[i][1][2]),
+									new THREE.Vector3(vertexPos[i][2][0], vertexPos[i][2][1], vertexPos[i][2][2]),
+									new THREE.Vector3(vertexPos[i][3][0], vertexPos[i][3][1], vertexPos[i][3][2])
 								)
 
 								quadGeo.faces.push(
-									new THREE.Face3(2, 1, 0),
-									new THREE.Face3(3, 2, 0)
+									new THREE.Face3(0, 1, 2),
+									new THREE.Face3(0, 2, 3)
 								)
 
-								var sticker = new THREE.Mesh(quadGeo, defaultMat);
+								var au, bu, cu, du;
+								var av, bv, cv, dv;
+
+								if (uvAxisOrder[i][0] == 1) {
+									au = xl * x;
+									bu = xl * (x+1);
+									cu = xl * (x+1);
+									du = xl * x;
+								} else if (uvAxisOrder[i][1] == 1) {
+									au = yl * y;
+									bu = yl * (y+1);
+									cu = yl * (y+1);
+									du = yl * y;
+								} else if (uvAxisOrder[i][2] == 1) {
+									au = zl * z;
+									bu = zl * (z+1);
+									cu = zl * (z+1);
+									du = zl * z;
+								}
+
+								if (uvAxisOrder[i][0] == 2) {
+									av = xl * x;
+									bv = xl * x;
+									cv = xl * (x+1);
+									dv = xl * (x+1);
+								} else if (uvAxisOrder[i][1] == 2) {
+									av = yl * y;
+									bv = yl * y;
+									cv = yl * (y+1);
+									dv = yl * (y+1);
+								} else if (uvAxisOrder[i][2] == 2) {
+									av = zl * z;
+									bv = zl * z;
+									cv = zl * (z+1);
+									dv = zl * (z+1);
+								}
+
+								quadGeo.faceVertexUvs[0] = [];
+
+								/*
+								quadGeo.faceVertexUvs[0].push(
+									new THREE.Vector2(au, av),
+									new THREE.Vector2(bu, bv),
+									new THREE.Vector2(cu, cv),
+									new THREE.Vector2(du, dv),
+								)
+								*/
+
+								quadGeo.faceVertexUvs[0].push(
+									[
+										new THREE.Vector2(au, av),
+										new THREE.Vector2(bu, bv),
+										new THREE.Vector2(cu, cv),
+									],
+									[
+										new THREE.Vector2(au, av),
+										new THREE.Vector2(cu, cv),
+										new THREE.Vector2(du, dv),
+									]
+								)
+
+								quadGeo.uvsNeedUpdate = true;
+
+								var sticker = new THREE.Mesh(quadGeo, stickerDefaultMat);
 
 								scene.add(sticker);
-								
+
 								sticker.parent = currentCube;
 								sticker.position.set(0,0,0);
-								sticker.rotation.set(stickerRotations[i][0], stickerRotations[i][1], stickerRotations[i][2]);
+
 
 							}
 
@@ -147,12 +283,18 @@
 		
 		function Start() {
 
+			const tex = new THREE.TextureLoader().load( 'http://localhost:8080/images/Portrait.jpg' );
+
+			stickerDefaultMat = new THREE.MeshBasicMaterial( {
+				map: tex
+			} )
+
 			window.addEventListener( 'mousemove', onMouseMove, false );
 			window.addEventListener( 'click', onMouseClick, false );
 
 			lastFrameTime = Date.now();
 			
-			materialBrush = new THREE.MeshBasicMaterial( {color: 0xff0000 } );
+			//materialBrush = new THREE.MeshBasicMaterial( {color: 0xff0000 } );
 
             //Boilerplate
 			scene = new THREE.Scene();
@@ -184,8 +326,8 @@
 
             xCubes = 3; yCubes = 3; zCubes = 3;
             cubeSize = 1;
-			cubeSpacing = 0.1;
-			stickerMargin = 0.1;
+			cubeSpacing = 0.02;
+			stickerMargin = 0.05;
 			stickerSpacing = 0.0001;
 
             //defaultMat = new THREE.MeshBasicMaterial( {color: 0xFF0000} );
@@ -228,7 +370,9 @@
 		function Update() {
 
             deltaTime = Date.now() - lastFrameTime;
-            lastFrameTime = Date.now();
+			lastFrameTime = Date.now();
+			
+			//cubeCenter.rotateY(0.001);
 
 			requestAnimationFrame( Update );
 			stats.update();
