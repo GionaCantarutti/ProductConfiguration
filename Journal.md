@@ -12,4 +12,4 @@ It also could implement a way to visualize how the rotations would look
 
 *Day 3:* updated sticker generation so that they do not end up flipped. Added proper UVs to the stickers to appy textures to them.
 
-![Screenshot of current progress](images/Cube with stickers.jpg)
+![Screenshot of current progress](images/screenshot1.PNG)
