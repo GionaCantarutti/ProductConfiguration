@@ -20,8 +20,278 @@
 		<script src="lib/stats.min.js"></script>
 		<script src="lib/Coordinates.js"></script>
 		<script src="lib/OrbitControls.js"></script>
+		<script src='lib/dat.gui.min.js'></script>
+		<script src='lib/GLTFLoader.js'></script>
+		<script src="lib/BufferGeometryUtils.js"></script>
 	</head>
 	<body>
+
+		<script type="text/x-glsl" id="vertex">
+		
+			varying vec3 vNormal;
+			varying vec3 vPosition;
+			varying vec2 uVv;
+
+			attribute vec4 tangent;
+			varying vec3 vTangent;
+			varying vec3 vBitangent;
+
+			void main() {
+				vec4 vPos = modelViewMatrix * vec4( position, 1.0 );
+				vPosition = vPos.xyz;
+				vNormal = normalize(normalMatrix * normal);
+
+				vec3 objectTangent = vec3( tangent.xyz );
+				vec3 transformedTangent = normalMatrix * objectTangent;
+				vTangent = normalize( transformedTangent );
+				// w is 1 or -1 depending on the sign of det( M tangent )
+				vBitangent = normalize( cross( vNormal, vTangent ) * tangent.w );
+
+				uVv = uv;
+				gl_Position = projectionMatrix * vPos;
+			}
+
+		</script>
+
+		<script type="text/x-glsl" id="fragment">
+
+			#define LIGHT_COUNT 2
+
+			const float PI = 3.14159;
+
+			varying vec3 vPosition;
+			varying vec2 uVv;
+			uniform vec3 pointLightPosition[LIGHT_COUNT]; // in world space
+			uniform vec3 clight[LIGHT_COUNT];
+			uniform sampler2D specularMap;
+			uniform sampler2D diffuseMap;
+			uniform sampler2D roughnessMap;
+			uniform vec2 textureRepeat;
+
+			varying vec3 vNormal;
+			varying vec3 vTangent;
+			varying vec3 vBitangent;
+			uniform sampler2D normalMap;
+			uniform vec2 normalScale;
+
+			uniform samplerCube envMap;
+
+			vec3 cdiff;
+			vec3 cspec;
+			float roughness;
+
+			float getSpecularMIPLevel( const in float roughness, const in int maxMIPLevel ) {
+
+				float maxMIPLevelScalar = float( maxMIPLevel );
+
+				float sigma = PI * roughness * roughness / ( 1.0 + roughness );
+				float desiredMIPLevel = maxMIPLevelScalar + log2( sigma );
+
+				// clamp to allowable LOD ranges.
+				return clamp( desiredMIPLevel, 0.0, maxMIPLevelScalar );
+
+			}
+
+			vec3 FSchlick(float vDoth, vec3 f0) {
+				return f0 + (vec3(1.0)-f0)*pow(1.0 - vDoth,5.0);
+			}
+
+			float DGGX(float NoH, float alpha) {
+				float alpha2 = alpha * alpha;
+				float k = NoH*NoH * (alpha2 - 1.0) + 1.0;
+    			return alpha2 / (PI * k * k );
+			}
+
+			float G1(float nDotv, float alpha) {
+				float alpha2 = alpha*alpha;
+				return 2.0 * (nDotv / (nDotv + sqrt(alpha2 + (1.0-alpha2)*nDotv*nDotv )));
+			}
+
+			float GSmith(float nDotv, float nDotl, float alpha) {
+				return G1(nDotl,alpha)*G1(nDotv,alpha);
+			}
+
+			vec3 inverseTransformDirection( in vec3 dir, in mat4 matrix ) {
+				return normalize( ( vec4( dir, 0.0 ) * matrix ).xyz );
+			}
+
+			void main() {
+
+				vec3 outRadiance = vec3(0, 0, 0);
+				vec3 another = vec3(0, 0, 0);
+
+				for (int i = 0; i < LIGHT_COUNT; i++) {
+
+					vec4 lPosition = viewMatrix * vec4( pointLightPosition[i], 1.0 );
+					vec3 l = normalize(lPosition.xyz - vPosition.xyz);
+
+					vec3 normal = normalize( vNormal );
+					vec3 tangent = normalize( vTangent );
+					vec3 bitangent = normalize( vBitangent );
+					mat3 vTBN = mat3( tangent, bitangent, normal );
+					vec3 mapN = texture2D( normalMap, uVv ).xyz * 2.0 - 1.0;
+					vec3 n = normalize( vTBN * mapN );
+
+					vec3 v = normalize( -vPosition);
+					vec3 h = normalize( v + l);
+					// small quantity to prevent divisions by 0
+					float nDotl = max(dot( n, l ),0.000001);
+					float lDoth = max(dot( l, h ),0.000001);
+					float nDoth = max(dot( n, h ),0.000001);
+					float vDoth = max(dot( v, h ),0.000001);
+					float nDotv = max(dot( n, v ),0.000001);
+
+					cdiff = texture2D( diffuseMap, uVv*textureRepeat ).rgb;
+					// texture in sRGB, linearize
+					cdiff = pow( cdiff, vec3(2.2));
+					cspec = texture2D( specularMap, uVv*textureRepeat ).rgb;
+					// texture in sRGB, linearize
+					cspec = pow( cspec, vec3(2.2));
+					roughness = texture2D( roughnessMap, uVv*textureRepeat).r; // no need to linearize roughness map
+					vec3 fresnel = FSchlick(vDoth, cspec);
+					float alpha = roughness * roughness;
+					vec3 BRDF = (vec3(1.0)-fresnel)*cdiff/PI + fresnel*GSmith(nDotv,nDotl, alpha)*DGGX(nDoth,alpha)/
+						(4.0*nDotl*nDotv);
+
+					vec3 vReflect = reflect(vPosition,n);
+					float specularMIPLevel = getSpecularMIPLevel(alpha,8 );
+					vec3 r = inverseTransformDirection( vReflect, viewMatrix );
+
+					vec3 envLight = textureCubeLodEXT( envMap, vec3(-r.x, r.yz), specularMIPLevel ).rgb;
+					envLight = pow( envLight, vec3(2.2));
+						
+					outRadiance = outRadiance + (envLight*PI* clight[i] * nDotl * BRDF );
+					//another = n;
+
+				}
+
+				// gamma encode the final value
+				gl_FragColor = vec4(pow( outRadiance, vec3(1.0/2.2)), 1.0);
+				//gl_FragColor = vec4(another, 1.0);
+			}
+		
+		</script>
+
+		<script type="text/x-glsl" id="stickerVertex">
+		
+			varying vec3 vNormal;
+			varying vec3 vPosition;
+			varying vec2 uVv;
+
+			void main() {
+				vec4 vPos = modelViewMatrix * vec4( position, 1.0 );
+				vPosition = vPos.xyz;
+				vNormal = normalize(normalMatrix * normal);
+
+				uVv = uv;
+				gl_Position = projectionMatrix * vPos;
+			}
+
+		</script>
+
+		<script type="text/x-glsl" id="stickerFragment">
+
+			#define LIGHT_COUNT 2
+
+			const float PI = 3.14159;
+
+			varying vec3 vPosition;
+			varying vec2 uVv;
+			uniform vec3 pointLightPosition[LIGHT_COUNT]; // in world space
+			uniform vec3 clight[LIGHT_COUNT];
+			uniform vec3 cspec;
+			uniform sampler2D diffuseMap;
+			uniform vec2 textureRepeat;
+			uniform float roughness;
+
+			varying vec3 vNormal;
+
+			uniform samplerCube envMap;
+
+			vec3 cdiff;
+
+			float getSpecularMIPLevel( const in float roughness, const in int maxMIPLevel ) {
+
+				float maxMIPLevelScalar = float( maxMIPLevel );
+
+				float sigma = PI * roughness * roughness / ( 1.0 + roughness );
+				float desiredMIPLevel = maxMIPLevelScalar + log2( sigma );
+
+				// clamp to allowable LOD ranges.
+				return clamp( desiredMIPLevel, 0.0, maxMIPLevelScalar );
+
+			}
+
+			vec3 FSchlick(float vDoth, vec3 f0) {
+				return f0 + (vec3(1.0)-f0)*pow(1.0 - vDoth,5.0);
+			}
+
+			float DGGX(float NoH, float alpha) {
+				float alpha2 = alpha * alpha;
+				float k = NoH*NoH * (alpha2 - 1.0) + 1.0;
+    			return alpha2 / (PI * k * k );
+			}
+
+			float G1(float nDotv, float alpha) {
+				float alpha2 = alpha*alpha;
+				return 2.0 * (nDotv / (nDotv + sqrt(alpha2 + (1.0-alpha2)*nDotv*nDotv )));
+			}
+
+			float GSmith(float nDotv, float nDotl, float alpha) {
+				return G1(nDotl,alpha)*G1(nDotv,alpha);
+			}
+
+			vec3 inverseTransformDirection( in vec3 dir, in mat4 matrix ) {
+				return normalize( ( vec4( dir, 0.0 ) * matrix ).xyz );
+			}
+
+			void main() {
+
+				vec3 outRadiance = vec3(0, 0, 0);
+				vec3 another = vec3(0, 0, 0);
+
+				for (int i = 0; i < LIGHT_COUNT; i++) {
+
+					vec4 lPosition = viewMatrix * vec4( pointLightPosition[i], 1.0 );
+					vec3 l = normalize(lPosition.xyz - vPosition.xyz);
+
+					vec3 n = normalize( vNormal );
+
+					vec3 v = normalize( -vPosition);
+					vec3 h = normalize( v + l);
+					// small quantity to prevent divisions by 0
+					float nDotl = max(dot( n, l ),0.000001);
+					float lDoth = max(dot( l, h ),0.000001);
+					float nDoth = max(dot( n, h ),0.000001);
+					float vDoth = max(dot( v, h ),0.000001);
+					float nDotv = max(dot( n, v ),0.000001);
+
+					cdiff = texture2D( diffuseMap, uVv*textureRepeat ).rgb;
+					// texture in sRGB, linearize
+					cdiff = pow( cdiff, vec3(2.2));
+					vec3 fresnel = FSchlick(vDoth, cspec);
+					float alpha = roughness * roughness;
+					vec3 BRDF = (vec3(1.0)-fresnel)*cdiff/PI + fresnel*GSmith(nDotv,nDotl, alpha)*DGGX(nDoth,alpha)/
+						(4.0*nDotl*nDotv);
+
+					vec3 vReflect = reflect(vPosition,n);
+					float specularMIPLevel = getSpecularMIPLevel(alpha,8 );
+					vec3 r = inverseTransformDirection( vReflect, viewMatrix );
+
+					vec3 envLight = textureCubeLodEXT( envMap, vec3(-r.x, r.yz), specularMIPLevel ).rgb;
+					envLight = pow( envLight, vec3(2.2));
+						
+					outRadiance = outRadiance + (envLight*PI* clight[i] * nDotl * BRDF );
+					//another = n;
+
+				}
+
+				// gamma encode the final value
+				gl_FragColor = vec4(pow( outRadiance, vec3(1.0/2.2)), 1.0);
+				//gl_FragColor = vec4(another, 1.0);
+			}
+		
+		</script>
 
 		<script>
 		
@@ -42,7 +312,6 @@
 
 		var cubes;
 		
-
 		var mouse = new THREE.Vector2();
 		var raycaster = new THREE.Raycaster();
 
@@ -77,19 +346,141 @@
 			[1, 2, 0],
 		];
 
-		var cubeCenter = new THREE.Object3D();
+		var cubeCenter;
 		var pivots = [];
+
+		function Start() {
+
+			var loader = new THREE.TextureLoader();
+			const tex = loader.load( 'http://localhost:8080/images/Portrait.jpg' );
+
+
+			var matName = "Wood_StaggeredFloorPlanks";
+			var diffuseMap = loader.load( "http://localhost:8080/textures/" + matName + "_Diffuse.png" );
+			var specularMap = loader.load( "http://localhost:8080/textures/" + matName + "_Specular.png" );
+			var roughnessMap = loader.load( "http://localhost:8080/textures/" + matName + "_Roughness.png" );
+			var normalMap = loader.load( "http://localhost:8080/textures/" + matName + "_Normal.png" );
+
+			const cubeLoader = new THREE.CubeTextureLoader();
+			const skybox = cubeLoader.load( [
+			'http://localhost:8080/textures/cubemap/posx.png',
+			'http://localhost:8080/textures/cubemap/negx.png',
+			'http://localhost:8080/textures/cubemap/posy.png',
+			'http://localhost:8080/textures/cubemap/negy.png',
+			'http://localhost:8080/textures/cubemap/posz.png',
+			'http://localhost:8080/textures/cubemap/negz.png'
+			]);
+
+			var uniforms = {
+						specularMap: {value: specularMap},
+						diffuseMap:	{value: diffuseMap},
+						roughnessMap:	{value: roughnessMap},
+						normalMap: {value: normalMap},
+						normalScale: {value: new THREE.Vector2(1,1)},
+						pointLightPosition:	{ value: [
+							new THREE.Vector3(5, 5, 5),
+							new THREE.Vector3(-5, -6, -9)
+						] },
+						clight:	{ value: [
+							new THREE.Vector3(3, 3, 3),
+							new THREE.Vector3(2, 2, 2)
+						] },
+						textureRepeat: { type: "v2", value: new THREE.Vector2(1,1) },
+						envMap: { value: skybox }
+					};
+
+			vs = document.getElementById("vertex").textContent;
+			fs = document.getElementById("fragment").textContent;
+
+			materialExtensions = {
+				shaderTextureLOD: true // set to use shader texture LOD
+			};
+
+			defaultMat = new THREE.ShaderMaterial({ uniforms: uniforms, vertexShader: vs, fragmentShader: fs, extensions: materialExtensions});
+			defaultMat.vertexTangents = true;
+
+			var stickerUniforms = {
+						cspec: {value: new THREE.Vector3(0.2, 0.2, 0.2)},
+						diffuseMap:	{value: tex},
+						roughness:	{value: 0.5},
+						pointLightPosition:	{ value: [
+							new THREE.Vector3(5, 5, 5),
+							new THREE.Vector3(-5, -6, -9)
+						] },
+						clight:	{ value: [
+							new THREE.Vector3(3, 3, 3),
+							new THREE.Vector3(2, 2, 2)
+						] },
+						textureRepeat: { type: "v2", value: new THREE.Vector2(1,1) },
+						envMap: { value: skybox }
+					};
+
+			svs = document.getElementById("stickerVertex").textContent;
+			sfs = document.getElementById("stickerFragment").textContent;
+
+			materialExtensions = {
+				shaderTextureLOD: true // set to use shader texture LOD
+			};
+
+			stickerDefaultMat = new THREE.ShaderMaterial({ uniforms: stickerUniforms, vertexShader: svs, fragmentShader: sfs, extensions: materialExtensions});
+
+			window.addEventListener( 'mousemove', onMouseMove, false );
+			window.addEventListener( 'click', onMouseClick, false );
+
+			lastFrameTime = Date.now();
+
+			materialBrush = new THREE.MeshBasicMaterial( {color: 0xff0000 } );
+
+			//Boilerplate
+			scene = new THREE.Scene();
+			camera = new THREE.PerspectiveCamera( 90, window.innerWidth / window.innerHeight, 0.1, 1000 );
+
+			scene.background = skybox;
+
+			renderer = new THREE.WebGLRenderer( {antialias: true} );
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			renderer.setClearColor( 0xf0f0f0 );
+			document.body.appendChild( renderer.domElement );
+
+			//Camera settings
+			camera.position.set(3,4,6);
+			camera.lookAt( new THREE.Vector3(0,0,0));
+
+			xCubes = 5; yCubes = 5; zCubes = 5;
+			cubeSize = 0.5;
+			cubeSpacing = 0.3;
+			stickerMargin = 0.05;
+			stickerSpacing = 0.0001;
+
+			//defaultMat = new THREE.MeshBasicMaterial( {color: 0xFF0000} );
+
+			CreateCube();
+
+			cubeCenter.position.set(0,0,0);
+
+			//Stats
+			stats = new Stats();
+			stats.domElement.style.position = 'absolute';
+			stats.domElement.style.top = '0px';
+			document.body.appendChild( stats.domElement );
+
+			controls = new THREE.OrbitControls( camera );
+			controls.addEventListener( 'change', Render );
+
+
+		}
 
         function CreateCube() {
 
 			cubes = [];
+			cubeCenter = new THREE.Group();
 			scene.add(cubeCenter);
 			cubeCenter.position.set((xCubes / 2.0) * (cubeSize + cubeSpacing), (yCubes / 2.0) * (cubeSize + cubeSpacing), (zCubes / 2.0) * (cubeSize + cubeSpacing));
 
 			for(let i = 0; i < 6; i++) {
 				var newPivot = new THREE.Object3D();
-				scene.add(newPivot);
-				newPivot.parent = cubeCenter;
+				//scene.add(newPivot);
+				cubeCenter.add(newPivot);
 
 				newPivot.position = new THREE.Vector3(cubeSize + (cubeSpacing));
 				pivots.push(newPivot);
@@ -104,16 +495,18 @@
 					cubes[x][y] = yArr;
                     for (z = 0; z < zCubes; z++) {
 
-                        var cubeGeo = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+                        var cubeGeo = new THREE.BoxBufferGeometry(cubeSize, cubeSize, cubeSize);
                         var newCube = new THREE.Mesh( cubeGeo, defaultMat );
 
-                        newCube.position.set(((x + 0.5) * cubeSize) + (cubeSpacing * x), ((y + 0.5) * cubeSize) + (cubeSpacing * y), ((z + 0.5) * cubeSize) + (cubeSpacing * z))
+						THREE.BufferGeometryUtils.computeTangents(cubeGeo);
 
-						scene.add( newCube );
+                        newCube.position.set(((x + 0.5) * cubeSize) + (cubeSpacing * x), ((y + 0.5) * cubeSize) + (cubeSpacing * y), ((z + 0.5) * cubeSize) + (cubeSpacing * z));
+
+						//scene.add( newCube );
 
 						cubes[x][y][z] = newCube;
 
-						newCube.parent = cubeCenter;
+						cubeCenter.add(newCube);
 						newCube.position.sub(cubeCenter.position);
 
                     }
@@ -262,12 +655,13 @@
 								)
 
 								quadGeo.uvsNeedUpdate = true;
+								quadGeo.computeVertexNormals();
 
 								var sticker = new THREE.Mesh(quadGeo, stickerDefaultMat);
 
-								scene.add(sticker);
+								//scene.add(sticker);
 
-								sticker.parent = currentCube;
+								currentCube.add(sticker);
 								sticker.position.set(0,0,0);
 
 
@@ -280,86 +674,24 @@
 			}
 
 		}
-		
-		function Start() {
-
-			const tex = new THREE.TextureLoader().load( 'http://localhost:8080/images/Portrait.jpg' );
-
-			stickerDefaultMat = new THREE.MeshBasicMaterial( {
-				map: tex
-			} )
-
-			window.addEventListener( 'mousemove', onMouseMove, false );
-			window.addEventListener( 'click', onMouseClick, false );
-
-			lastFrameTime = Date.now();
-			
-			//materialBrush = new THREE.MeshBasicMaterial( {color: 0xff0000 } );
-
-            //Boilerplate
-			scene = new THREE.Scene();
-			camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
-
-			renderer = new THREE.WebGLRenderer( {antialias: true} );
-			renderer.setSize( window.innerWidth, window.innerHeight );
-			renderer.setClearColor( 0xf0f0f0 );
-			document.body.appendChild( renderer.domElement );
-			
-            //Camera settings
-			camera.position.set(3,4,6);
-			camera.lookAt( new THREE.Vector3(0,0,0));
-
-            //Skybox
-            /*
-            const loader = new THREE.CubeTextureLoader();
-            const skybox = loader.load( [
-            'http://localhost:8080/Front.jpg',
-            'http://localhost:8080/Side.jpg',
-            'http://localhost:8080/Top.jpg',
-            'http://localhost:8080/Bottom.jpg',
-            'http://localhost:8080/Side.jpg',
-            'http://localhost:8080/Side.jpg'
-            ]);
-
-            scene.background = skybox;
-            */
-
-            xCubes = 3; yCubes = 3; zCubes = 3;
-            cubeSize = 1;
-			cubeSpacing = 0.02;
-			stickerMargin = 0.05;
-			stickerSpacing = 0.0001;
-
-            //defaultMat = new THREE.MeshBasicMaterial( {color: 0xFF0000} );
-
-            CreateCube();
-			
-            //Stats
-			stats = new Stats();
-			stats.domElement.style.position = 'absolute';
-			stats.domElement.style.top = '0px';
-			document.body.appendChild( stats.domElement );
-			
-			// uncomment if you need to draw coordinate axes when building the scene
-			Coordinates.drawAllAxes();
-			
-			controls = new THREE.OrbitControls( camera );
-			controls.addEventListener( 'change', Render );
-			
-			
-		}
 
 		function onMouseClick() {
-			raycaster.setFromCamera(mouse, camera);
-			var intersects = raycaster.intersectObjects( scene.children );
 
-			if (intersects.length > 0) {
-				selectedCube = intersects[0];
+			if (typeof scene != "undefined") {
+
+				raycaster.setFromCamera(mouse, camera);
+				var intersects = raycaster.intersectObjects( scene.children, true );
+
+				if (intersects.length > 0) {
+					selectedCube = intersects[0];
+
+					selectedCube.object.material = materialBrush;
+
+					//selectedCube.object.position.set(0, 0, 0);
+				}
+
+
 			}
-
-			selectedCube.object.material = materialBrush;
-
-			//selectedCube.object.position.set(0, 0, 0);
 		}
 		
 		function onMouseMove() {

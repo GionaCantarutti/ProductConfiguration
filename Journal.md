@@ -13,3 +13,7 @@ It also could implement a way to visualize how the rotations would look
 *Day 3:* updated sticker generation so that they do not end up flipped. Added proper UVs to the stickers to appy textures to them.
 
 ![Screenshot of current progress](images/screenshot1.PNG)
+
+*Day 4:* added PBR shaders. Cubes and stickers use different shaders so that stickers don't need normal and specular maps
+
+![PBR cube](images/PBR_materials.PNG) ![Showcase of the two different shaders](images/Better_view_of_cube_material.PNG)
