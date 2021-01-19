@@ -17,3 +17,7 @@ It also could implement a way to visualize how the rotations would look
 *Day 4:* added PBR shaders. Cubes and stickers use different shaders so that stickers don't need normal and specular maps
 
 ![PBR cube](images/PBR_materials.PNG) ![Showcase of the two different shaders](images/Better_view_of_cube_material.PNG)
+
+*Day 5:* after spending some time learning HTML and CSS (as i never used them before) i implemented a sidebar to customize the cube. I also changed some parts in the js code to support the customization UI
+
+![Customization](images/UI_customization.PNG)

@@ -1,0 +1,73 @@
+body {
+    font-family: Monospace;
+    background-color: #001524;
+    margin: 0px;
+    overflow: hidden;
+}
+
+#threejs_scene {
+    background-color: #001524;
+    width: 80%;
+    height: 100%;
+    float: left;
+    border: 1px solid black;
+    padding: 0px;
+    position: fixed; /* fixed or static */
+}
+
+div label, div input {
+    vertical-align: middle;
+    padding: 0px;
+    margin: 0px;
+}
+
+#sidebar {
+    width: 20%;
+    height: 100%;
+    float: right;
+    text-align: center;
+    color: #55868C;
+    background: #001524;
+}
+
+#bottomtext {
+    font-size: smaller;
+    float: right;
+    text-align: center;
+    color: #55868C;
+    position: absolute;
+    bottom: 0;
+    word-wrap: break-word;
+}
+
+button {
+    color: #D8E2E9;
+    background-color: #5F758E;
+    border: none;
+    width: 30%;
+}
+
+input[type=number] {
+    width: 7%;
+    color: #D8E2E9;
+    background-color: #5F758E;
+    text-align: center;
+    border: 1px solid #003C66;
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=range] {
+    width: 30%;
+}
+
+select {
+    color: #D8E2E9;
+    background-color: #5F758E;
+    text-align: center;
+    border: 1px solid #003C66;
+}
