@@ -1,80 +1,47 @@
-# ProductVisualization
+# _ACME Cube™_ customizer
 
-![Image from Ford Configurator, developed in three.js](images/ford-configurator.jpg)
+This webapp allows to customize a rubik's cube by number of cubes, spacing between them, size, sticker margin, cube material and sticker texture.
 
-READ CAREFULLY this document BEFORE you start!
+It uses a mix of free textures found online and some scavenged from the example code of the course. To access those file the app requires a local server on the port 8080 for the project folder.
 
-## Prerequisites
+## Materials and shaders
 
-- read carefully all slides and notes up to lecture 20 before you start. Try the proposed exercises. 
+This project uses two sets of shaders: one simpler for the stickers and one for the cubes.
 
-## Hints
+The materials use the following PBR equations:
 
-- Try to work out a basic project which satisfies all requirements well before the deadline and as soon as possible: you will then use the remaining time to refine, improve and polish.
-- If you are stuck for too much time on a problem, ask for help, preferably in the forum.
-- the process is as important as the result. Use this project to learn a workflow, and how to use tools effectively. Experiment, and try to come up with efficient, elegant, and well commented code.
-- commit often in your git repository and with meaningful comments.
-- do not choose too complex products with many materials. 3-4 materials are enough.
+* Schlick approximation for Fresnel effect
 
+* GGX/Trowbridge-Reitz for the normal distribution function
 
-## Goals
+* Approximated Smith for the geometry factor
 
-The well-known ACME company has asked you to build a product **Web visualizer / configurator** for its new e-commerce site. Before giving you the job, ACME wants to evaluate how faithfully you can visualize and configure products.  ACME sells everything, so you can choose whatever kind of product you want for the demonstration.
+* Cook-Torrance microfaced specular model for the microfacet specular BRDF, using the previous three
 
-Your goal is to build a Web application (a HTML page) that:
+* Lambertian diffuse
 
-- visualizes a product in 3D using three.js, using PBR equations and materials;
-- allows the user to inspect the product (e.g. by orbiting the camera around it), and change some material on it by choosing from a few alternatives.
+Both materials support an arbitrary amount of light sources (needs to be set in the shader before compilation), a diffuse map and an eviroment map. Additionally the cube material also uses a specular, roughness and normal map. For stickers cspec and roughness are uniform across the entire material rather than texture mapped for simplicity.
 
-Try to make it look like a simple, but real portion of an e-commerce site, not a three.js example: choose carefully colors, fonts, images, and icons, also taking inspiration from real web sites. Before starting, search the web for existing 3D configurators. Note down what you like and don't like, and try to produce a result as professional as possible.
+What follows are a bunch of examples of the aviable materials and a gif demonstrating the enviroment map:
 
-## Steps (read CAREFULLY)
+<img src="images/Abstract_texture.PNG" width="350"> | <img src="images/Monna_lisa_texture.PNG" width="350">
+:-----------------------------------------------:|:--------------------------------------------:
+<img src="images/Wood_material.PNG" width="350">                | <img src="images/Metal_material.PNG" width="350">
 
-1. Prepare, and add to the repository, a journal.md file for logging your progress and choices.
+<img src="images/enviroment_map_demo.gif" width = 750>
 
-2. Choose a product for which: (i) you can easily build a 3D model, or (ii) you can download a 3D model which you have the right to use in non-commercial applications. The model should not be too complex (not more than 100k vertices) and in some format that three.js can read. [Three.js examples](https://threejs.org/examples/) provide a list of loaders for different formats: beware that not all of them work perfectly, and you might have to try with different formats. Preferably, use GLTF, but any other format is ok.
+## The process
 
-3. Design the lighting for the product. Products in web sites and catalogues are photographed using strategically placed lights that enhance details and shape. For example, [searching google images for product photography lighting](http://www.google.com/images?q=product+photography+lighting) will show you a number of real-world lighting setups that are used for products. In your lighting setup, you can use whatever you want, from punctual lights, to environment map, or light maps, or any combination of them, but you *must include* an environment map.
+When i started this my only experience with js was the previous assignment for this course so i started by copypasting its code and quickly putting together a prototype
 
-4. Design the PBR materials for the product. You can use PRB textures found anywhere, or produce them, e.g. with Substance Designer or B2M. If you use textures authored by someone else, just make sure you have the rights for using them in our context (non-commercial application). At least one of the materials must have 2-3 alternatives (e.g. different colors, or materials).
+The first few things went by smoothly until it came to adding stickers to the cube. Initially i went with the lazy approach of simply creating 6 identical quads and then rotating them into their intended position but that turned out to be a nightmare for UV mapping so i scrapped that and went with generating the quads with the vertices already in the right positions, without the need for rotations
 
-5. Include tone mapping and, if needed, post-processing/color correction.
+The next step was to implement the PBR shaders so i did just that by taking the shaders from the example code and modifying/mixing them together to make them have all the desired features. After some minor bugfixing this too went by smoothly
 
-6. Build the application that renders the chosen 3D model, with the designed lighting setup and materials, and an user interface for selecting the material between the alternatives. You must use shaders written by you, e.g. by extending the shaders we saw in the classroom. Your report needs to describe the kind of BRDF / lights you have implemented.
+With that done it was now time to tackle the UI which is generally the one thing i'm very bad at in all of my projects. As already stated i had never created a webapp before so it was finally time to learn html and css and after half a day of experiments i managed to get a working UI. While doing all that i took the opportunity to move the js code to a seperate file and i wanted to do the same for the shaders but for some reason that would just break everything so i left the shaders in the html file
 
-7. If possible, try to take into account implicit requirements as well. For example, you cannot use textures with file sizes of dozens of megabytes for a Web site; and also, your page should render at least at 30 fps on average smartphones. You will get bonus points for a result that could be deployed to a Web site with few or no modifications.
+## Conclusions
 
-8. (optional) include any technique that was not explained in the classroom, e.g. some special shader or post-processing technique. This will award you extra points in the evaluation.
+Overall i'm quite satisfied with the end result but i find the code itself to be very messy because of my inexperience with the languages and the "learn things as you go" approach i had with it
 
-9. Write a concise report by overwriting this file.
-
-## Starting code
-
-There is no specific starting code for this project. 
-
-## Documenting and report
-
-For project documentation and reporting, we use the [markdown format](https://daringfireball.net/projects/markdown/syntax), which is also the format of this document. Markdown is a lightweight markup language with plain text formatting syntax which is easy and quick to write, very human-readable, and that can be converted to HTML.
-
-If you need more features than the ones that markdown provides (e.g. writing equations), you can use one of its extensions called [markdeep](https://casual-effects.com/markdeep/).
-
-You are required to document your project in two ways:
-
-- maintain a journal (in a file called journal.md) describing key design decisions, changes, bug symptoms and solutions, including screenshots.
-- create a report (by overwriting this file).
-
-The report should be as brief as possible while covering the following points:
-
-- overall description: what your project is about and the files it uses.
-- results, including images of the scenes created, taken in a way that clearly illustrates that they satisfy the specification.
-- brief explanation of the process that you used to make your scene. Include tools, assets, and planning steps.
-
-## Constraints
-
-If you use textures / 3D models / substances / ..., make sure that you have the rights to include them. For example, search for images that come with a [CC Attribution, ShareAlike or NonCommercial licences](https://creativecommons.org/share-your-work/licensing-types-examples/).
-
-In this project, you are allowed to re-use assets taken elsewhere, but **entirely copying** others' work, even with slight modifications, is forbidden and will have serious consequences beyond the deletion of your project. In any case, mention any source of inspiration in your journal and final report.
-
-## Credits
-
-The image above comes from a [Ford car configurator built in three.js](http://www.ford.com/cars/mustang/customizer/#!/customize).
+I wish i could have spent more time on the actual "interactive 3D graphics" parts of the assignment rather than waste so much time on learning how to make webapps but i'm still happy i expanded my skillset

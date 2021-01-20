@@ -24,15 +24,7 @@ var selectedCube;
 
 var materialBrush;
 
-var stickerRotations = [
-    [0, 0, 0],
-    [0, 0, 1.57079],
-    [0, 0, 3.14159],
-    [0, 0, 4.71238],
-    [0, 1.57079, 0],
-    [0, 4.71238, 0]
-];
-
+//Delta coordinates to get the cube in a given facing direction
 var facingCube = [
     [+1, 0, 0],
     [0, +1, 0],
@@ -42,6 +34,7 @@ var facingCube = [
     [0, 0, +1],
 ];
 
+//What axis should be used for sticker UVs. 0 means the axis is ignored, 1 -> U and 2 -> V
 var uvAxisOrder = [
     [0, 1, 2],
     [2, 0, 1],
@@ -65,23 +58,25 @@ function Start() {
     document.body.appendChild(container);
 
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera( 90, container.clientWidth / container.clientHeight, 0.1, 1000 );
+    camera = new THREE.PerspectiveCamera( 90, container.clientWidth / container.clientHeight, 0.1, 100 );
     
     renderer = new THREE.WebGLRenderer( {antialias: true} );
     renderer.setSize( container.clientWidth, container.clientHeight );
     renderer.setClearColor( 0xf0f0f0 );
     container.appendChild( renderer.domElement );
+    window.onresize = onWindowResize;
 
     //Camera settings
     camera.position.set(3,4,6);
     camera.lookAt( new THREE.Vector3(0,0,0));
 
-
+    /*
     //Stats
     stats = new Stats();
     stats.domElement.style.position = 'absolute';
     stats.domElement.style.top = '0px';
     container.appendChild( stats.domElement );
+    */
 
     controls = new THREE.OrbitControls( camera, container );
     controls.addEventListener( 'change', Render );
@@ -258,8 +253,8 @@ function changeCubeParameter(value, parameter) {
 function onWindowResize(event) {
     var w = container.clientWidth;
     var h = container.clientHeight;
+    camera.aspect = w/h;
     renderer.setSize(w, h);
-    camera.aspect(w/h);
     camera.updateProjectionMatrix();
     controls.handleResize();
 }
@@ -350,6 +345,7 @@ function AttachStickers() {
                         var side = cubeRadius - stickerMargin;
                         var radius = cubeRadius + stickerSpacing;
 
+                        //Lookup table for the positions of sticker vertices depending on the face of the cube
                         var vertexPos = [
                             [
                                 [radius, -side, -side],
@@ -515,7 +511,7 @@ function Update() {
     //cubeCenter.rotateY(0.001);
 
     requestAnimationFrame( Update );
-    stats.update();
+    //stats.update();
     controls.update();
     Render();
 

@@ -286,7 +286,7 @@
 		<script src="scripts/main.js"></script>
 
 		<div id="sidebar">
-			<h1>Rubik cube customizer</h1>
+			<h1><i>ACME Cube™</i> customizer</h1>
 			<p>Here you'll be able to customize your very own <i>ACME Cube™</i> by picking from a wide range of materials*, stickers and settings</p>
 			
 			<h2>Cube count</h2>
@@ -310,17 +310,17 @@
 			<div>
 				<label for="spacing">Spacing</label>
 				<input type="range" step="0.005" min="0" max="0.1" value="0.05" class="slider" id="spacing" oninput="changeCubeParameter(this.value, 'spacing');">
-				<input type="number" id="spacingBox" value="0.2" onchange="changeCubeParameter(this.value, 'spacing');">
+				<input type="number" id="spacingBox" value="0.05" onchange="changeCubeParameter(this.value, 'spacing');">
 			</div>
 			<div>
 				<label for="cubesSize">Cubes size</label>
 				<input type="range" step="0.05" min="0.1" max="3" value="1" class="slider" id="cubesSize" oninput="changeCubeParameter(this.value, 'cubesSize');">
-				<input type="number" id="cubesSizeBox" value="0.2" onchange="changeCubeParameter(this.value, 'cubesSize');">
+				<input type="number" id="cubesSizeBox" value="1" onchange="changeCubeParameter(this.value, 'cubesSize');">
 			</div>
 			<div>
 				<label for="stickerMargin">Stickers spacing</label>
 				<input type="range" step="0.02" min="0" max="0.3" value="0.05" class="slider" id="stickerMargin" oninput="changeCubeParameter(this.value, 'stickerMargin');">
-				<input type="number" id="stickerMarginBox" value="0.2" onchange="changeCubeParameter(this.value, 'stickerMargin');">
+				<input type="number" id="stickerMarginBox" value="0.05" onchange="changeCubeParameter(this.value, 'stickerMargin');">
 			</div>
 
 			<h2>Appearance</h2>
